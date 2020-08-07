@@ -230,16 +230,53 @@ public:
     /**
      * "put" writes an object to a given subgroup/shard.
      *
-     * @param value             the object to write
+     * @param object            the object to write.
+     *                          User provided SubgroupType::ObjectType must have the following two members:
+     *                          - SubgroupType::ObjectType::key of SubgroupType::KeyType, which must be set to a
+     *                            valid key.
+     *                          - SubgroupType::ObjectType::ver of std::tuple<persistent::version_t, uint64_t>.
+     *                            Similar to the return value, this member is a two tuple with the first member
+     *                            for a version and the second for a timestamp. A caller of put can specify either
+     *                            of the version and timestamp meaning what is the latest version/timestamp the caller
+     *                            has seen. Cascade will reject the write if the corresponding key has been updated
+     *                            already. TODO: should we make it an optional feature?
      * @subugroup_index         the subgroup index of CascadeType
      * @shard_index             the shard index.
      *
      * @return a future to the version and timestamp of the put operation.
-     * TODO: check if the user application is responsible for reclaim the future by reading it sometime.
+     *
      */
     template <typename SubgroupType>
-    derecho::rpc::QueryResults<std::tuple<persistent::version_t,uint64_t>> put(const typename SubgroupType::ValType& value, 
+    derecho::rpc::QueryResults<std::tuple<persistent::version_t,uint64_t>> put(const typename SubgroupType::ObjectType& object,
             uint32_t subgroup_index=0, uint32_t shard_index=0);
+
+
+    /**
+     * "put" writes an object to a set of nodes in a given subgroup.
+     *
+     * @param object            the object to write.
+     *                          User provided SubgroupType::ObjectType must have the following two members:
+     *                          - SubgroupType::ObjectType::key of SubgroupType::KeyType, which must be set to a
+     *                            valid key.
+     *                          - SubgroupType::ObjectType::ver of std::tuple<persistent::version_t, uint64_t>.
+     *                            Similar to the return value, this member is a two tuple with the first member
+     *                            for a version and the second for a timestamp. A caller of put can specify either
+     *                            of the version and timestamp meaning what is the latest version/timestamp the caller
+     *                            has seen. Cascade will reject the write if the corresponding key has been updated
+     *                            already. TODO: should we make it an optional feature?
+     * @subugroup_index         the subgroup index of CascadeType
+     * @receivers               a list of receiver's node ids.
+     *
+     * @return a future to the version and timestamp of the put operation. Please note that the return value is a map of per-receiver futures.
+     * TODO: What should we do if the return values do not agree for different receivers.
+     */
+    template <typename SubgroupType>
+    derecho::rpc::QueryResults<std::tuple<persistent::version_t,uint64_t>> put(
+            const typename SubgroupType::ObjectType& object,
+            uint32_t subgroup_index = 0,
+            std::vector<derecho::node_id_t> receivers = {0})
+
+
 
     /**
      * "remove" deletes an object with the given key.
@@ -249,7 +286,6 @@ public:
      * @shard_index             the shard index.
      *
      * @return a future to the version and timestamp of the put operation.
-     * TODO: check if the user application is responsible for reclaim the future by reading it sometime.
      */
     template <typename SubgroupType>
     derecho::rpc::QueryResults<std::tuple<persistent::version_t,uint64_t>> remove(const typename SubgroupType::KeyType& key,
@@ -264,11 +300,10 @@ public:
      * @subugroup_index         the subgroup index of CascadeType
      * @shard_index             the shard index.
      *
-     * @return a future to the retrieved object.
-     * TODO: check if the user application is responsible for reclaim the future by reading it sometime.
+     * @return a future to the retrieved object. SubgroupType::ObjectType::key and SubgroupType::ObjectType::ver are set accordingly.
      */
     template <typename SubgroupType>
-    derecho::rpc::QueryResults<const typename SubgroupType::ValType> get(const typename SubgroupType::KeyType& key, const persistent::version_t& version = persistent::INVALID_VERSION,
+    derecho::rpc::QueryResults<const typename SubgroupType::ObjectType> get(const typename SubgroupType::KeyType& key, const persistent::version_t& version = persistent::INVALID_VERSION,
             uint32_t subgroup_index=0, uint32_t shard_index=0);
 
     /**
@@ -279,11 +314,10 @@ public:
      * @subugroup_index         the subgroup index of CascadeType
      * @shard_index             the shard index.
      *
-     * @return a future to the retrieved object.
-     * TODO: check if the user application is responsible for reclaim the future by reading it sometime.
+     * @return a future to the retrieved object. SubgroupType::ObjectType::key and SubgroupType::ObjectType::ver are set accordingly.
      */
     template <typename SubgroupType>
-    derecho::rpc::QueryResults<const typename SubgroupType::ValType> get_by_time(const typename SubgroupType::KeyType& key, const uint64_t& ts_us,
+    derecho::rpc::QueryResults<const typename SubgroupType::ObjectType> get_by_time(const typename SubgroupType::KeyType& key, const uint64_t& ts_us,
             uint32_t subgroup_index=0, uint32_t shard_index=0);
 };
 
