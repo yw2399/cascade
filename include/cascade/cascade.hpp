@@ -343,7 +343,7 @@ namespace cascade {
     public:
         using derecho::GroupReference::group;
         persistent::Persistent<DeltaCascadeStoreCore<KT,VT,IK,IV>,ST> persistent_core;
-        std::shared_ptr<CascadeWatcher<KT,VT,IK,IV>> cascade_watcher_ptr;
+        CascadeWatcher<KT,VT,IK,IV>* cascade_watcher_ptr;
         
         REGISTER_RPC_FUNCTIONS(PersistentCascadeStore,
                                put,
