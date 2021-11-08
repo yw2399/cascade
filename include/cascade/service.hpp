@@ -1081,7 +1081,9 @@ namespace cascade {
      * 1 - a thread pool for the off-critical path logics.
      * 2 - a prefix registry.
      * 3 - a bounded Action buffer.
+     * 4 - a udl data map.
      */
+
     using prefix_entry_t = 
                 std::unordered_map<
                     std::string, // udl_id
@@ -1091,8 +1093,15 @@ namespace cascade {
                     >
                 >;
     using match_results_t = std::unordered_map<std::string,prefix_entry_t>;
+
+    class IUserDefinedLogicData {}; 
+
     template <typename... CascadeTypes>
     class CascadeContext: public ICascadeContext {
+    public:
+        /*
+         * This is the abstract class for the UDLs that use the UDL data get/set API.
+         */
     private:
         struct action_queue {
             struct Action           action_buffer[ACTION_BUFFER_SIZE];
@@ -1119,6 +1128,9 @@ namespace cascade {
         std::shared_ptr<PrefixRegistry<prefix_entry_t,PATH_SEPARATOR>> prefix_registry_ptr;
         /** the data path logic loader */
         std::unique_ptr<UserDefinedLogicManager<CascadeTypes...>> user_defined_logic_manager;
+        /** The UserDefineLogicData map */
+        std::unordered_map<std::string,std::weak_ptr<IUserDefinedLogicData>> user_defined_logic_data_map;
+        mutable std::shared_mutex user_defined_logic_data_map_mutex;
         /** the off-critical data path worker thread pools */
         std::vector<std::thread> workhorses_for_multicast;
         std::vector<std::thread> workhorses_for_p2p;
@@ -1232,6 +1244,7 @@ namespace cascade {
          * @return the unordered map of observers registered to this prefix.
          */
         virtual match_results_t get_prefix_handlers(const std::string& prefix); 
+
         /**
          * post an action to the Context for processing.
          *
@@ -1250,6 +1263,25 @@ namespace cascade {
          */
         virtual size_t action_queue_length_p2p();
         virtual size_t action_queue_length_multicast();
+
+        /**
+         * Getter and Setter for the user defined logic data
+         *
+         * @param key   The key for the data
+         *
+         * @return a weak pointer to the data.
+         */
+        virtual std::weak_ptr<IUserDefinedLogicData> get_user_defined_logic_data(const std::string& key);
+
+        /**
+         * Setter for the user defined logic data
+         *
+         * @param key   The key for the data
+         * @param udl_ptr
+         *              A weak pointer that keeps track of the data. Please note that you have to give a moveable
+         *              argument here.
+         */
+        virtual void set_user_defined_logic_data(const::std::string& key, std::weak_ptr<IUserDefinedLogicData>&& udl_ptr);
 
         /**
          * Destructor

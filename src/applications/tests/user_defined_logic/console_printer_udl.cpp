@@ -15,6 +15,11 @@ std::string get_description() {
     return MY_DESC;
 }
 
+class ConsolePrinterUserData : public IUserDefinedLogicData {
+public:
+    int x;
+};
+
 class ConsolePrinterOCDPO: public OffCriticalDataPathObserver {
     virtual void operator () (const std::string& key_string,
                               const uint32_t prefix_length,
@@ -41,8 +46,14 @@ public:
 
 std::shared_ptr<OffCriticalDataPathObserver> ConsolePrinterOCDPO::ocdpo_ptr;
 
+std::shared_ptr<IUserDefinedLogicData> user_data_ptr;
+
 void initialize(ICascadeContext* ctxt) {
     ConsolePrinterOCDPO::initialize();
+    ConsolePrinterUserData* ptr = new ConsolePrinterUserData;
+    user_data_ptr = std::shared_ptr<IUserDefinedLogicData>(dynamic_cast<IUserDefinedLogicData*>(ptr));
+    auto* typed_ctxt = dynamic_cast<DefaultCascadeContextType*>(ctxt);
+    typed_ctxt->set_user_defined_logic_data("console_printer",std::weak_ptr<IUserDefinedLogicData>(user_data_ptr));
 }
 
 std::shared_ptr<OffCriticalDataPathObserver> get_observer(

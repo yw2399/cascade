@@ -1705,6 +1705,23 @@ size_t CascadeContext<CascadeTypes...>::action_queue_length_multicast() {
 }
 
 template <typename... CascadeTypes>
+// std::weak_ptr<CascadeContext<CascadeTypes...>::IUserDefinedLogicData> CascadeContext<CascadeTypes...>::get_user_defined_logic_data(const std::string& key) {
+std::weak_ptr<IUserDefinedLogicData> CascadeContext<CascadeTypes...>::get_user_defined_logic_data(const std::string& key) {
+    std::shared_lock lck(user_defined_logic_data_map_mutex);
+    if (user_defined_logic_data_map.find(key) == user_defined_logic_data_map.end()) {
+        return std::weak_ptr<IUserDefinedLogicData>();
+    }
+    return user_defined_logic_data_map.at(key);
+}
+
+template <typename... CascadeTypes>
+void CascadeContext<CascadeTypes...>::set_user_defined_logic_data(const std::string& key,
+                                                                  std::weak_ptr<IUserDefinedLogicData>&& udl_ptr) {
+    std::unique_lock lck(user_defined_logic_data_map_mutex);
+    user_defined_logic_data_map[key] = std::move(udl_ptr);
+}
+
+template <typename... CascadeTypes>
 CascadeContext<CascadeTypes...>::~CascadeContext() {
     destroy();
 }
