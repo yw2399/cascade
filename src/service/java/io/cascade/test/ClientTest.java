@@ -210,8 +210,9 @@ public class ClientTest {
                         ByteBuffer bbval = ByteBuffer.allocateDirect(arr2.length);
                         bbval.put(arr2);
 
-                        QueryResults<Bundle> qr = client.put(type, bbkey, bbval, subgroupIndex, shardIndex);
-                        System.out.println(qr.get());
+                        //QueryResults<Bundle> qr = client.put(type, bbkey, bbval, subgroupIndex, shardIndex);
+                        client.put_and_forget(type, bbkey, bbval, subgroupIndex, shardIndex);
+                        System.out.println("put_and_forget is called.");
                         break;
                     case "remove":
                         // remove a key-value pair from cascade.
@@ -231,7 +232,7 @@ public class ClientTest {
                         arr = splited[2].getBytes();
                         bbkey = ByteBuffer.allocateDirect(arr.length);
                         bbkey.put(arr);
-                        qr = client.remove(type, bbkey, subgroupIndex, shardIndex);
+                        QueryResults<Bundle> qr = client.remove(type, bbkey, subgroupIndex, shardIndex);
                         System.out.println(qr.get());
                         break;
                     case "get":

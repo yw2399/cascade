@@ -99,6 +99,65 @@ public class Client {
             long shardID);
 
     /**
+     * TODO: Yifan's change in enhancing the performance of put operation using
+     * put_and_forget api.
+     * Put a String key and its corresponding value into cascade. The new object would
+     * replace the old object if a new key-value pair with the same key as one put
+     * before is put.
+     *
+     * @param type          The type of the subgroup. In Cascade, this would be VCSS
+     *                      and PCSS
+     * @param key           The string key of the key-value pair. Requires:
+     *                      {@code key} should be non-negative.
+     * @param buf           A Java direct byte buffer that holds the value of the
+     *                      key-value pair. Requires: {@code buf} should be a direct
+     *                      byte buffer.
+     * @param subgroupIndex The index of the subgroup with type {@code type} to put
+     *                      this key-value pair into.
+     * @param shardID       The index of the shard within the subgroup with type
+     *                      {@code type} and subgroup index {@code subgroupIndex} to
+     *                      put this key-value pair into.
+     * @return A Future that stores a handle to a Bundle object that contains the
+     *         version and timestamp of the operation.
+     */
+    public void put_and_forget(ServiceType type, String key, ByteBuffer buf, long subgroupIndex, long shardID) {
+        byte[] arr = key.getBytes();
+        ByteBuffer bbkey = ByteBuffer.allocateDirect(arr.length);
+        bbkey.put(arr);
+        put_and_forget_internal(type, subgroupIndex, shardID, bbkey, buf);
+
+        return;
+        //return new QueryResults<Bundle>(res, 0, type);
+    }
+
+    public void put_and_forget(ServiceType type, ByteBuffer key, ByteBuffer buf, long subgroupIndex,
+            long shardID) {
+        put_and_forget_internal(type, subgroupIndex, shardID, key, buf);
+        //return new QueryResults<Bundle>(res, 0, type);
+        return;
+    }
+
+    /**
+     * TODO: Yifan's change in enhancing the performance of put operation using
+     * put_and_forget api.
+     * Internal interface for put_and_forget operation.
+     *
+     * @param type          The type of the subgroup. In Cascade, this would be
+     *                      VCSS or PCSS.
+     * @param subgroupIndex The index of the subgroup with type {@code type} to put
+     *                      this key-value pair into.
+     * @param shardIndex    The index of the shard within the subgroup with type
+     *                      {@code type} and subgroup index {@code subgroupIndex} to
+     *                      put this key-value pair into.
+     * @param key           The byte buffer key of the key-value pair.
+     * @param val           The byte buffer value of the key-value pair.
+     * @return A handle of the C++ future that stores the version and timestamp of
+     *         the operation.
+     */
+    private native long put_and_forget_internal(ServiceType type, long subgroupIndex, long shardIndex, ByteBuffer key,
+            ByteBuffer val);
+
+    /**
      * Put a String key and its corresponding value into cascade. The new object would
      * replace the old object if a new key-value pair with the same key as one put
      * before is put.

@@ -332,6 +332,31 @@ jlong put(std::function<typename T::ObjectType *(JNIEnv *, jobject, jobject)> f,
     return reinterpret_cast<jlong>(qrh);
 }
 
+template <typename T>
+jlong put_and_forget(std::function<typename T::ObjectType *(JNIEnv *, jobject, jobject)> f, JNIEnv *env, derecho::cascade::ServiceClientAPI *capi, jlong subgroup_index, jlong shard_index, jobject key, jobject val)
+{
+ /*
+ #ifndef NDEBUG
+     std::cout << "entering jlong put! Here am I! " << std::endl;
+
+     char *key_buf = static_cast<char *>(env->GetDirectBufferAddress(key));
+     jlong len = env->GetDirectBufferCapacity(key);
+     for (int i = 0; i < len; ++i){
+         printf("%d,", key_buf[i]);
+     }
+     printf("\n");
+ #endif
+ */
+    // translate Java objects to C++ objects.
+    typename T::ObjectType *obj = f(env, key, val);
+    //  std::cout << "putting! " << subgroup_index << " " << shard_index << std::endl;
+    // execute the put
+    capi->put_and_forget<T>(*obj, subgroup_index, shard_index);
+    //store the result in a handler and return it!
+    // std::cout << "finished put!" << std::endl;
+    return 0;
+}
+
 /*
  * Class:     io_cascade_Client
  * Method:    putInternal
@@ -348,6 +373,31 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_putInternal(JNIEnv *env, jobject 
 
     // executing the put
     on_service_val(service_val, return put, translate_str_obj, env, capi, subgroup_index, shard_index, key, val);
+
+    // if service_val does not match successfully, return -1
+    return -1;
+}
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    put_and_forget_internal
+ * Signature: (Lio/cascade/ServiceType;JJLjava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)J
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_put_1and_1forget_1internal
+  (JNIEnv *env, jobject obj, jobject service_type, jlong subgroup_index, jlong shard_index, jobject key, jobject val)
+{
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+    int service_val = get_value(env, service_type);
+
+/*
+#ifndef NDEBUG
+    std::cout << "called from jni handler." << std::endl;
+    std::cout << "service value:" << service_val << std::endl;
+#endif
+*/
+
+    // executing the put
+    on_service_val(service_val, return put_and_forget, translate_str_obj, env, capi, subgroup_index, shard_index, key, val);
 
     // if service_val does not match successfully, return -1
     return -1;

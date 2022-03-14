@@ -49,6 +49,14 @@ JNIEXPORT jobject JNICALL Java_io_cascade_Client_getMemberSelectionPolicy
 
 /*
  * Class:     io_cascade_Client
+ * Method:    put_and_forget_internal
+ * Signature: (Lio/cascade/ServiceType;JJLjava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)J
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_put_1and_1forget_1internal
+  (JNIEnv *, jobject, jobject, jlong, jlong, jobject, jobject);
+
+/*
+ * Class:     io_cascade_Client
  * Method:    putInternal
  * Signature: (Lio/cascade/ServiceType;JJLjava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)J
  */
