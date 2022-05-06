@@ -114,6 +114,33 @@ jobject cpp_int_vector_to_java_list(JNIEnv *env, std::vector<node_id_t> vec)
     return arr_obj;
 }
 
+/**
+ * Translate a C++ string vector to a Java String List.
+ */
+jobject cpp_string_vector_to_java_list(JNIEnv *env, std::vector<std::string> vec)
+{
+    // create a Java array list
+    jclass arr_list_cls = env->FindClass("java/util/ArrayList");
+    jmethodID arr_init_mid = env->GetMethodID(arr_list_cls, "<init>", "()V");
+    jobject arr_obj = env->NewObject(arr_list_cls, arr_init_mid);
+
+    // list add method
+    jclass list_cls = env->FindClass("java/util/List");
+    jmethodID list_add_mid = env->GetMethodID(list_cls, "add", "(Ljava/lang/Object;)Z");
+
+    // integer class
+    jclass string_cls = env->FindClass("java/lang/String");
+    jmethodID string_init_mid = env->GetMethodID(string_cls, "<init>", "(I)V");
+
+    // fill everything in
+    for (node_id_t id : vec)
+    {
+        jobject int_obj = env->NewObject(integer_cls, integer_init_mid, id);
+        env->CallObjectMethod(arr_obj, list_add_mid, int_obj);
+    }
+    return arr_obj;
+}
+
 /*
  * Class:     io_cascade_Client
  * Method:    getMembers
@@ -1243,3 +1270,20 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_removeInternal__Ljava_nio_ByteBuf
 #endif
     return reinterpret_cast<jlong>(qrh);
 }
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    listObjectPools
+ * Signature: ()Ljava/util/List;
+ */
+JNIEXPORT jobject JNICALL Java_io_cascade_Client_listObjectPools(JNIEnv *, jobject)
+{
+#ifndef NDEBUG
+    std::cout<<"Entering remove internal for object pool."<<std::endl;
+#endif
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+    std::vector<std::string> opps = list_object_pools(true);
+
+
+}
+    
