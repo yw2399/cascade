@@ -1,4 +1,5 @@
 #include <cascade/service_client_api.hpp>
+#include <chrono>
 #include <memory>
 #include <unordered_map>
 #include "io_cascade_Client.h"
@@ -46,6 +47,38 @@ typedef enum {
         break;                                                                      \
     }
 
+/**
+ * Helper function to allocate a Java direct byte buffer from C++ pointers with no copy (sometimes does not work).
+ * @param env the Java environment
+ * @param ptr the content of the byte buffer to allocate
+ * @param size the size of the byte buffer
+ * @return the Java direct byte buffer object
+ */
+jobject allocate_byte_buffer(JNIEnv *env, void *ptr, int size){
+    jobject direct_buffer_obj = env->NewDirectByteBuffer(ptr, static_cast<jlong>(size));
+    return direct_buffer_obj;
+}
+
+/**
+ * Helper function to allocate a Java direct byte buffer from C++ pointers with copy.
+ * @param env the Java environment
+ * @param ptr the content of the byte buffer to allocate
+ * @param size the size of the byte buffer
+ * @return the Java direct byte buffer object
+ */
+jobject allocate_byte_buffer_by_copy(JNIEnv *env, void *ptr, int size){
+    jbyteArray data_byte_arr = env->NewByteArray(size);
+    env->SetByteArrayRegion(data_byte_arr, 0, size, reinterpret_cast<jbyte *>(ptr));
+
+    jclass byte_buffer_cls = env->FindClass("java/nio/ByteBuffer");
+    // create and return a new direct byte buffer
+    jmethodID alloc_mid = env->GetStaticMethodID(byte_buffer_cls, "allocateDirect", "(I)Ljava/nio/ByteBuffer;");
+    jobject byte_buf_obj = env->CallStaticObjectMethod(byte_buffer_cls, alloc_mid, static_cast<jint>(size));
+    jmethodID put_mid = env->GetMethodID(byte_buffer_cls, "put", "([B)Ljava/nio/ByteBuffer;");
+    env->CallObjectMethod(byte_buf_obj, put_mid, data_byte_arr);
+    return byte_buf_obj;
+}
+
 /*
  * Class:     io_cascade_Client
  * Method:    createClient
@@ -87,6 +120,9 @@ derecho::cascade::ServiceClientAPI *get_api(JNIEnv *env, jobject obj)
     return reinterpret_cast<derecho::cascade::ServiceClientAPI *>(jhandle);
 }
 
+//TODO: Refactor code to merge cpp_int_vector_to_java_list and cpp_string_vector_to_java_list (the
+//following two functions) together using lambda.
+
 /**
  * Translate a C++ int vector to a Java Integer List.
  */
@@ -119,24 +155,20 @@ jobject cpp_int_vector_to_java_list(JNIEnv *env, std::vector<node_id_t> vec)
  */
 jobject cpp_string_vector_to_java_list(JNIEnv *env, std::vector<std::string> vec)
 {
-    // create a Java array list
+    // Create a Java array list.
     jclass arr_list_cls = env->FindClass("java/util/ArrayList");
     jmethodID arr_init_mid = env->GetMethodID(arr_list_cls, "<init>", "()V");
     jobject arr_obj = env->NewObject(arr_list_cls, arr_init_mid);
 
-    // list add method
+    // List add method.
     jclass list_cls = env->FindClass("java/util/List");
     jmethodID list_add_mid = env->GetMethodID(list_cls, "add", "(Ljava/lang/Object;)Z");
 
-    // integer class
-    jclass string_cls = env->FindClass("java/lang/String");
-    jmethodID string_init_mid = env->GetMethodID(string_cls, "<init>", "(I)V");
-
-    // fill everything in
-    for (node_id_t id : vec)
+    // Convert strings into ByteBuffers and fill them in the Java array list.
+    for(std::vector<std::string>::iterator it = vec.begin(); it != vec.end(); it++)
     {
-        jobject int_obj = env->NewObject(integer_cls, integer_init_mid, id);
-        env->CallObjectMethod(arr_obj, list_add_mid, int_obj);
+        jobject direct_buffer_obj = allocate_byte_buffer_by_copy(env, &(*it)[0], (*it).length());
+        env->CallObjectMethod(arr_obj, list_add_mid, direct_buffer_obj);
     }
     return arr_obj;
 }
@@ -529,8 +561,10 @@ jlong get_by_time(JNIEnv *env, derecho::cascade::ServiceClientAPI *capi, jlong s
  * Class:     io_cascade_Client
  * Method:    getInternalByTime
  * Signature: (Lio/cascade/ServiceType;JJLjava/nio/ByteBuffer;J)J
+ * The typed version of getInternalByTime.
  */
-JNIEXPORT jlong JNICALL Java_io_cascade_Client_getInternalByTime(JNIEnv *env, jobject obj, jobject j_service_type, jlong subgroup_index, jlong shard_index, jobject key, jlong timestamp, jboolean stable)
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_getInternalByTime__Lio_cascade_ServiceType_2JJLjava_nio_ByteBuffer_2JZ
+(JNIEnv *env, jobject obj, jobject j_service_type, jlong subgroup_index, jlong shard_index, jobject key, jlong timestamp, jboolean stable)
 {
     derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
     int service_type = get_int_value(env, j_service_type);
@@ -538,6 +572,28 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_getInternalByTime(JNIEnv *env, jo
     on_service_type(service_type, return get_by_time, env, capi, subgroup_index, shard_index, key, timestamp, stable, translate_str_key);
 
     return -1;
+}
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    getInternalByTime
+ * Signature: (Ljava/nio/ByteBuffer;JZ)J
+ * The object pool version of getInternalByTime.
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_getInternalByTime__Ljava_nio_ByteBuffer_2JZ
+  (JNIEnv *env, jobject obj, jobject key, jlong timestamp, jboolean stable)
+{
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+#ifndef NDEBUG
+    std::cout << "Entering getInternalByTime for object pool." << std::endl;
+#endif
+    // Execute multi_get for object pool.
+    std::string obj_key = translate_str_key(env, key);
+    auto res = capi->get_by_time(obj_key, timestamp, stable);
+    // Store the result in a handler.
+    QueryResultHolder<const derecho::cascade::ObjectWithStringKey> *qrh =
+        new QueryResultHolder<const derecho::cascade::ObjectWithStringKey>(res);
+    return reinterpret_cast<jlong>(qrh);
 }
 
 /**
@@ -605,7 +661,7 @@ jlong list_keys(JNIEnv *env, derecho::cascade::ServiceClientAPI *capi, jlong ver
  * Method:    listKeysInternal
  * Signature: (Lio/cascade/ServiceType;JZJJ)J
  */
-JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysInternal
+JNIEXPORT jlong JNICALL JNICALL Java_io_cascade_Client_listKeysInternal__Lio_cascade_ServiceType_2JZJJ 
   (JNIEnv * env, jobject obj, jobject j_service_type, jlong version, jboolean stable, jlong subgroup_index, jlong shard_index){
     derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
 #ifndef NDEBUG
@@ -618,6 +674,40 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysInternal
 
     // impossible
     return -1;
+}
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    listKeysInternal
+ * Signature: (Ljava/nio/ByteBuffer;JZ)J
+ * This is the object pool version of listKeys.
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysInternal__Ljava_nio_ByteBuffer_2JZ
+  (JNIEnv * env, jobject obj,jobject path, jlong version, jboolean stable)
+{
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+#ifndef NDEBUG
+    std::cout << "Entering listKeys for object pool." << std::endl;
+#endif
+    // Execute listKeys for object pool.
+    std::string pool_path = translate_str_key(env, path);
+//    auto res = capi->list_keys(version, stable, pool_path);
+     //derecho::rpc::QueryResults<std::vector<std::string>> res = capi->list_keys(version, stable, pool_path);
+     std::vector<std::unique_ptr<derecho::rpc::QueryResults<std::vector<std::string>>>> results =
+         std::move(capi->list_keys(version, stable, pool_path));
+
+     for(auto& result : results) {
+         //TODO: Decide a right path.
+         // Create a new query result that concatenates all the query results together.
+         // Or, create a new unwrapper in Client.java. Here we return the address of a Java Array
+         // list, which contains all the QueryResults.
+         derecho::rpc::QueryResults<std::vector<std::string>> qr = std::move(*result);
+     }
+
+    // Store the result in a handler.
+    QueryResultHolder<std::vector<std::string>> *qrh =
+        new QueryResultHolder<std::vector<std::string>>(keys);
+    return reinterpret_cast<jlong>(qrh);
 }
 
 /**
@@ -721,38 +811,6 @@ void create_object_from_query(JNIEnv *env, jlong handle, jobject hashmap, std::f
         // put the key value pair into the hashmap
         env->CallObjectMethod(hashmap, map_put, integer_object, java_obj);
     }
-}
-
-/**
- * Helper function to allocate a Java direct byte buffer from C++ pointers with no copy (sometimes does not work).
- * @param env the Java environment
- * @param ptr the content of the byte buffer to allocate
- * @param size the size of the byte buffer
- * @return the Java direct byte buffer object
- */
-jobject allocate_byte_buffer(JNIEnv *env, void *ptr, int size){
-    jobject direct_buffer_obj = env->NewDirectByteBuffer(ptr, static_cast<jlong>(size));
-    return direct_buffer_obj;
-}
-
-/**
- * Helper function to allocate a Java direct byte buffer from C++ pointers with copy.
- * @param env the Java environment
- * @param ptr the content of the byte buffer to allocate
- * @param size the size of the byte buffer
- * @return the Java direct byte buffer object
- */
-jobject allocate_byte_buffer_by_copy(JNIEnv *env, void *ptr, int size){
-    jbyteArray data_byte_arr = env->NewByteArray(size);
-    env->SetByteArrayRegion(data_byte_arr, 0, size, reinterpret_cast<jbyte *>(ptr));
-
-    jclass byte_buffer_cls = env->FindClass("java/nio/ByteBuffer");
-    // create and return a new direct byte buffer
-    jmethodID alloc_mid = env->GetStaticMethodID(byte_buffer_cls, "allocateDirect", "(I)Ljava/nio/ByteBuffer;");
-    jobject byte_buf_obj = env->CallStaticObjectMethod(byte_buffer_cls, alloc_mid, static_cast<jint>(size));
-    jmethodID put_mid = env->GetMethodID(byte_buffer_cls, "put", "([B)Ljava/nio/ByteBuffer;");
-    env->CallObjectMethod(byte_buf_obj, put_mid, data_byte_arr);
-    return byte_buf_obj;
 }
 
 /*
@@ -1276,14 +1334,12 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_removeInternal__Ljava_nio_ByteBuf
  * Method:    listObjectPools
  * Signature: ()Ljava/util/List;
  */
-JNIEXPORT jobject JNICALL Java_io_cascade_Client_listObjectPools(JNIEnv *, jobject)
+JNIEXPORT jobject JNICALL Java_io_cascade_Client_listObjectPools(JNIEnv *env, jobject obj)
 {
 #ifndef NDEBUG
-    std::cout<<"Entering remove internal for object pool."<<std::endl;
+    std::cout<<"Entering the internal function for llisting object pool."<<std::endl;
 #endif
     derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
-    std::vector<std::string> opps = list_object_pools(true);
-
-
+    std::vector<std::string> opps = capi->list_object_pools(true);
+    return cpp_string_vector_to_java_list(env, opps);
 }
-    
