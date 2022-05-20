@@ -122,17 +122,9 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysInternal__Lio_cascade_Ser
 /*
  * Class:     io_cascade_Client
  * Method:    listKeysInternal
- * Signature: (Ljava/nio/ByteBuffer;JZ)J
+ * Signature: (Ljava/nio/ByteBuffer;JZ)Ljava/util/List;
  */
-JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysInternal__Ljava_nio_ByteBuffer_2JZ
-  (JNIEnv *, jobject, jobject, jlong, jboolean);
-
-/*
- * Class:     io_cascade_Client
- * Method:    listKeysByTimeInternal
- * Signature: (Ljava/nio/ByteBuffer;JZ)J
- */
-JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysByTimeInternal__Ljava_nio_ByteBuffer_2JZ
+JNIEXPORT jobject JNICALL Java_io_cascade_Client_listKeysInternal__Ljava_nio_ByteBuffer_2JZ
   (JNIEnv *, jobject, jobject, jlong, jboolean);
 
 /*
@@ -142,6 +134,14 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysByTimeInternal__Ljava_nio
  */
 JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysByTimeInternal__Lio_cascade_ServiceType_2JZJJ
   (JNIEnv *, jobject, jobject, jlong, jboolean, jlong, jlong);
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    listKeysByTimeInternal
+ * Signature: (Ljava/nio/ByteBuffer;JZ)Ljava/util/List;
+ */
+JNIEXPORT jobject JNICALL Java_io_cascade_Client_listKeysByTimeInternal__Ljava_nio_ByteBuffer_2JZ
+  (JNIEnv *, jobject, jobject, jlong, jboolean);
 
 /*
  * Class:     io_cascade_Client

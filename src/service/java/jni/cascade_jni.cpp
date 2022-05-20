@@ -679,11 +679,12 @@ JNIEXPORT jlong JNICALL JNICALL Java_io_cascade_Client_listKeysInternal__Lio_cas
 /*
  * Class:     io_cascade_Client
  * Method:    listKeysInternal
- * Signature: (Ljava/nio/ByteBuffer;JZ)J
+ * Signature: (Ljava/nio/ByteBuffer;JZ)Ljava/util/List;
+ * Return: A Java list of pointers to the future of query results.
  * This is the object pool version of listKeys.
  */
-JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysInternal__Ljava_nio_ByteBuffer_2JZ
-  (JNIEnv * env, jobject obj,jobject path, jlong version, jboolean stable)
+JNIEXPORT jobject JNICALL Java_io_cascade_Client_listKeysInternal__Ljava_nio_ByteBuffer_2JZ
+  (JNIEnv * env, jobject obj, jobject path, jlong version, jboolean stable)
 {
     derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
 #ifndef NDEBUG
@@ -691,23 +692,32 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysInternal__Ljava_nio_ByteB
 #endif
     // Execute listKeys for object pool.
     std::string pool_path = translate_str_key(env, path);
-//    auto res = capi->list_keys(version, stable, pool_path);
-     //derecho::rpc::QueryResults<std::vector<std::string>> res = capi->list_keys(version, stable, pool_path);
-     std::vector<std::unique_ptr<derecho::rpc::QueryResults<std::vector<std::string>>>> results =
-         std::move(capi->list_keys(version, stable, pool_path));
+    std::vector<std::unique_ptr<derecho::rpc::QueryResults<std::vector<std::string>>>> results =
+        std::move(capi->list_keys(version, stable, pool_path));
 
-     for(auto& result : results) {
-         //TODO: Decide a right path.
-         // Create a new query result that concatenates all the query results together.
-         // Or, create a new unwrapper in Client.java. Here we return the address of a Java Array
-         // list, which contains all the QueryResults.
-         derecho::rpc::QueryResults<std::vector<std::string>> qr = std::move(*result);
-     }
+    // Create a Java array list to hold the return value.
+    jclass arr_list_cls = env->FindClass("java/util/ArrayList");
+    jmethodID arr_init_mid = env->GetMethodID(arr_list_cls, "<init>", "()V");
+    jobject arr_obj = env->NewObject(arr_list_cls, arr_init_mid);
 
-    // Store the result in a handler.
-    QueryResultHolder<std::vector<std::string>> *qrh =
-        new QueryResultHolder<std::vector<std::string>>(keys);
-    return reinterpret_cast<jlong>(qrh);
+    // List add method.
+    jclass list_cls = env->FindClass("java/util/List");
+    jmethodID list_add_mid = env->GetMethodID(list_cls, "add", "(Ljava/lang/Object;)Z");
+
+    // Java Long class.
+    jclass long_cls = env->FindClass("java/lang/Long");
+    jmethodID long_init_mid = env->GetMethodID(long_cls, "<init>", "(J)V");
+
+    // Add the address of the future for the query result to the Java list.
+    for(auto& result : results) {
+        derecho::rpc::QueryResults<std::vector<std::string>> qr = std::move(*result);
+        QueryResultHolder<std::vector<std::string>> *qrh =
+            new QueryResultHolder<std::vector<std::string>>(qr);
+        // Cast the address into a Java Long object and add the Long object to the Java ArrayList.
+        jobject long_qrh = env->NewObject(long_cls, long_init_mid, reinterpret_cast<jlong>(qrh));
+        env->CallObjectMethod(arr_obj, list_add_mid, long_qrh);
+    }
+    return arr_obj;
 }
 
 /**
@@ -738,7 +748,7 @@ jlong list_keys_by_time(JNIEnv *env, derecho::cascade::ServiceClientAPI *capi, j
  * Method:    listKeysByTimeInternal
  * Signature: (Lio/cascade/ServiceType;JZJJ)J
  */
-JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysByTimeInternal
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysByTimeInternal__Lio_cascade_ServiceType_2JZJJ
   (JNIEnv * env, jobject obj, jobject j_service_type, jlong timestamp, jboolean stable, jlong subgroup_index, jlong shard_index){
     derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
 #ifndef NDEBUG
@@ -753,6 +763,50 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysByTimeInternal
     // impossible
     return -1;
 }
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    listKeysByTimeInternal
+ * Signature: (Ljava/nio/ByteBuffer;JZ)Ljava/util/List;
+ * ListKeysByTime for object pool.
+ */
+JNIEXPORT jobject JNICALL Java_io_cascade_Client_listKeysByTimeInternal__Ljava_nio_ByteBuffer_2JZ
+  (JNIEnv * env, jobject obj, jobject path, jlong timestamp, jboolean stable)
+{
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+#ifndef NDEBUG
+    std::cout << "Entering listKeys for object pool." << std::endl;
+#endif
+    // Execute listKeys for object pool.
+    std::string pool_path = translate_str_key(env, path);
+    std::vector<std::unique_ptr<derecho::rpc::QueryResults<std::vector<std::string>>>> results =
+        std::move(capi->list_keys_by_time(timestamp, stable, pool_path));
+
+    // Create a Java array list to hold the return value.
+    jclass arr_list_cls = env->FindClass("java/util/ArrayList");
+    jmethodID arr_init_mid = env->GetMethodID(arr_list_cls, "<init>", "()V");
+    jobject arr_obj = env->NewObject(arr_list_cls, arr_init_mid);
+
+    // List add method.
+    jclass list_cls = env->FindClass("java/util/List");
+    jmethodID list_add_mid = env->GetMethodID(list_cls, "add", "(Ljava/lang/Object;)Z");
+
+    // Java Long class.
+    jclass long_cls = env->FindClass("java/lang/Long");
+    jmethodID long_init_mid = env->GetMethodID(long_cls, "<init>", "(J)V");
+
+    // Add the address of the future for the query result to the Java list.
+    for(auto& result : results) {
+        derecho::rpc::QueryResults<std::vector<std::string>> qr = std::move(*result);
+        QueryResultHolder<std::vector<std::string>> *qrh =
+            new QueryResultHolder<std::vector<std::string>>(qr);
+        // Cast the address into a Java Long object and add the Long object to the Java ArrayList.
+        jobject long_qrh = env->NewObject(long_cls, long_init_mid, reinterpret_cast<jlong>(qrh));
+        env->CallObjectMethod(arr_obj, list_add_mid, long_qrh);
+    }
+    return arr_obj;
+}
+
 
 /*
  * Class:     io_cascade_Client

@@ -2,6 +2,7 @@ package io.cascade;
 
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.nio.ByteBuffer;
 
 /**
@@ -358,6 +359,24 @@ public class Client implements AutoCloseable {
     }
 
     /**
+     * List all keys in the object pool.
+     * @param path          The path to the object pool.
+     * @param version       The upper bound persistent version of all keys listed.
+     *                      -1 if you want to list all keys.
+     * @param stable        True if we need the keys for stable record.
+     * @return A list of futures that store a handle to a List<ByteBuffer> object that contains
+     *         all keys included in the operation.
+     */
+    public ArrayList<QueryResults<List<ByteBuffer>>> listKeys(ByteBuffer path, long version, boolean stable){
+        List<Long> keys = listKeysInternal(path, version, stable);
+        ArrayList<QueryResults<List<ByteBuffer>>> res = new ArrayList<QueryResults<List<ByteBuffer>>>(keys.size()); 
+        for(int i = 0; i < keys.size(); i++) {
+            res.add(new QueryResults<List<ByteBuffer>>(keys.get(i).longValue(), 2));
+        }
+        return res;
+    }
+
+    /**
      * List all keys in the specified shard and subgroup up to a specified timestamp.
      *
      * @param type          The type of the subgroup.
@@ -373,6 +392,23 @@ public class Client implements AutoCloseable {
     public QueryResults<List<ByteBuffer>> listKeysByTime(ServiceType type, long timestamp, long subgroupIndex, long shardIndex){
         long res = listKeysByTimeInternal(type, timestamp, true/*TODO:stable*/, subgroupIndex, shardIndex);
         return new QueryResults<List<ByteBuffer>>(res, 2);
+    }
+
+    /**
+     * List all keys in the object pool.
+     * @param path          The path to the object pool.
+     * @param timestamp     The upper bound timestamp of all keys listed.
+     * @param stable        True if we need the keys for stable record.
+     * @return A list of futures that store a handle to a List<ByteBuffer> object that contains
+     *         all keys included in the operation.
+     */
+    public ArrayList<QueryResults<List<ByteBuffer>>> listKeysByTime(ByteBuffer path, long timestamp, boolean stable){
+        List<Long> keys = listKeysByTimeInternal(path, timestamp, stable);
+        ArrayList<QueryResults<List<ByteBuffer>>> res = new ArrayList<QueryResults<List<ByteBuffer>>>(keys.size()); 
+        for(int i = 0; i < keys.size(); i++) {
+            res.add(new QueryResults<List<ByteBuffer>>(keys.get(i).longValue(), 2));
+        }
+        return res;
     }
 
 
@@ -869,19 +905,9 @@ public class Client implements AutoCloseable {
      * @param version       The upper bound persistent version of all keys listed.
      *                      -1 if you want to list all keys.
      * @param stable        get stable data or not.
-     * @return A handle of the C++ future that stores a vector with all keys included.
+     * @return A list of handles of the C++ future that stores a vector with all keys in a shard.
      */
-    private native long listKeysInternal(ByteBuffer path, long version, boolean stable);
-
-    /**
-     * Internal interface for listing the keys in an object pool.
-     *
-     * @param path          The path of the object pool.
-     * @param timestamp     The upper bound timestamp of all keys listed.
-     * @param stable        Get stable data or not.
-     * @return A handle of the C++ future that stores a vector with all keys included.
-     */
-    private native long listKeysByTimeInternal(ByteBuffer path, long timestamp, boolean stable);
+    private native List<Long> listKeysInternal(ByteBuffer path, long version, boolean stable);
 
     /**
      * Internal interface for list key by time operation.
@@ -897,6 +923,16 @@ public class Client implements AutoCloseable {
      * @return A handle of the C++ future that stores a vector with all keys included.
      */
     private native long listKeysByTimeInternal(ServiceType type, long timestamp, boolean stable, long subgroupIndex, long shardIndex);
+
+    /**
+     * Internal interface for listing the keys in an object pool.
+     *
+     * @param path          The path of the object pool.
+     * @param timestamp     The upper bound timestamp of all keys listed.
+     * @param stable        Get stable data or not.
+     * @return A handle of the C++ future that stores a vector with all keys included.
+     */
+    private native List<Long> listKeysByTimeInternal(ByteBuffer path, long timestamp, boolean stable);
 
     /**
      * Internal interface for creating an object pool.
