@@ -23,7 +23,7 @@ public class QueryResults<T> implements AutoCloseable {
 
     /**
      * The mode of the future. 0 for Bundle type (put, remove, create_object_pool), 1 for ByteBuffer
-     * type (get, get by time), 2 for List<ByteBuffer> type (list keys).
+     * type (get, get by time), 2 for List<ByteBuffer> type (list keys), 3 for Long type (get size).
      */
     public int mode;
 

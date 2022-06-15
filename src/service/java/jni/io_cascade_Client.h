@@ -122,7 +122,7 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_listKeysInternal__Lio_cascade_Ser
 /*
  * Class:     io_cascade_Client
  * Method:    listKeysInternal
- * Signature: (Ljava/nio/ByteBuffer;JZ)Ljava/util/List;
+ * Signature: (Ljava/nio/ByteBuffer;JZ)Ljava/util/ArrayList;
  */
 JNIEXPORT jobject JNICALL Java_io_cascade_Client_listKeysInternal__Ljava_nio_ByteBuffer_2JZ
   (JNIEnv *, jobject, jobject, jlong, jboolean);
@@ -226,10 +226,42 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_getSizeInternal__Lio_cascade_Serv
 /*
  * Class:     io_cascade_Client
  * Method:    getSizeInternal
- * Signature: (Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;JZ)J
+ * Signature: (Ljava/nio/ByteBuffer;JZ)J
  */
-JNIEXPORT jlong JNICALL Java_io_cascade_Client_getSizeInternal__Ljava_nio_ByteBuffer_2Ljava_nio_ByteBuffer_2JZ
-  (JNIEnv *, jobject, jobject, jobject, jlong, jboolean);
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_getSizeInternal__Ljava_nio_ByteBuffer_2JZ
+  (JNIEnv *, jobject, jobject, jlong, jboolean);
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    multiGetSizeInternal
+ * Signature: (Lio/cascade/ServiceType;JJLjava/nio/ByteBuffer;)J
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_multiGetSizeInternal__Lio_cascade_ServiceType_2JJLjava_nio_ByteBuffer_2
+  (JNIEnv *, jobject, jobject, jlong, jlong, jobject);
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    multiGetSizeInternal
+ * Signature: (Ljava/nio/ByteBuffer;)J
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_multiGetSizeInternal__Ljava_nio_ByteBuffer_2
+  (JNIEnv *, jobject, jobject);
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    getSizeByTimeInternal
+ * Signature: (Lio/cascade/ServiceType;JJLjava/nio/ByteBuffer;JZ)J
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_getSizeByTimeInternal__Lio_cascade_ServiceType_2JJLjava_nio_ByteBuffer_2JZ
+  (JNIEnv *, jobject, jobject, jlong, jlong, jobject, jlong, jboolean);
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    getSizeByTimeInternal
+ * Signature: (Ljava/nio/ByteBuffer;JZ)J
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_getSizeByTimeInternal__Ljava_nio_ByteBuffer_2JZ
+  (JNIEnv *, jobject, jobject, jlong, jboolean);
 
 #ifdef __cplusplus
 }

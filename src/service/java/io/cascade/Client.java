@@ -353,8 +353,8 @@ public class Client implements AutoCloseable {
      * @return A Future that stores a handle to a List<ByteBuffer> object that contains
      *         all keys included in the operation.
      */
-    public QueryResults<List<ByteBuffer>> listKeys(ServiceType type, long version, long subgroupIndex, long shardIndex){
-        long res = listKeysInternal(type, version, true/*TODO:stable*/, subgroupIndex, shardIndex);
+    public QueryResults<List<ByteBuffer>> list_keys(ServiceType type, long version, boolean stable, long subgroupIndex, long shardIndex){
+        long res = listKeysInternal(type, version, stable, subgroupIndex, shardIndex);
         return new QueryResults<List<ByteBuffer>>(res, 2);
     }
 
@@ -367,9 +367,14 @@ public class Client implements AutoCloseable {
      * @return A list of futures that store a handle to a List<ByteBuffer> object that contains
      *         all keys included in the operation.
      */
-    public ArrayList<QueryResults<List<ByteBuffer>>> listKeys(ByteBuffer path, long version, boolean stable){
-        List<Long> keys = listKeysInternal(path, version, stable);
-        ArrayList<QueryResults<List<ByteBuffer>>> res = new ArrayList<QueryResults<List<ByteBuffer>>>(keys.size()); 
+    public ArrayList<QueryResults<List<ByteBuffer>>> list_keys(ByteBuffer path,
+            long version, boolean stable)
+    {
+        ArrayList<Long> keys = listKeysInternal(path, version, stable);
+        ArrayList<QueryResults<List<ByteBuffer>>> res =
+            new ArrayList<QueryResults<List<ByteBuffer>>>(keys.size()); 
+        // Interpret the C++ handler address to QueryResults. Each shard is responsible to one
+        // QueryResults.
         for(int i = 0; i < keys.size(); i++) {
             res.add(new QueryResults<List<ByteBuffer>>(keys.get(i).longValue(), 2));
         }
@@ -387,7 +392,7 @@ public class Client implements AutoCloseable {
      *                      {@code type} and subgroup index {@code subgroupIndex} to
      *                      put this key-value pair into.
      * @return A Future that stores a handle to a List<ByteBuffer> object that contains
-     *         all keys included in the operation.
+     s  *         all keys included in the operation.
      */
     public QueryResults<List<ByteBuffer>> listKeysByTime(ServiceType type, long timestamp, long subgroupIndex, long shardIndex){
         long res = listKeysByTimeInternal(type, timestamp, true/*TODO:stable*/, subgroupIndex, shardIndex);
@@ -464,7 +469,7 @@ public class Client implements AutoCloseable {
      *
      * @return a list of object pools
      */
-    public native List<String> listObjectPools();
+    public native List<ByteBuffer> listObjectPools();
 
     /**
      * Helper function to convert String to ByteBuffer.
@@ -802,6 +807,109 @@ public class Client implements AutoCloseable {
         return new QueryResults<Bundle>(res, 0);
     }
 
+    /**
+     * Get the size of an object, typed version.
+     *
+     * @param type          The type of the subgroup.
+     * @param subgroupIndex The index of the subgroup with type {@code type} to get
+     *                      this key-value pair from.
+     * @param shardIndex    The index of the shard within the subgroup with type
+     *                      {@code type} and subgroup index {@code subgroupIndex} to
+     *                      get this key-value pair from.
+     * @param key           The byte buffer key of the key-value pair.
+     * @param version       The version returned by the Future object of past put.
+     *                      -1 if no version is available.
+     * @param stable        get stable version or not.
+     * @return The size of the object.
+     */
+    public QueryResults<Long> get_size(ServiceType type, long subgroupIndex, long shardIndex,
+        ByteBuffer key, long version, boolean stable)
+    {
+        long res = getSizeInternal(type, subgroupIndex, shardIndex, key, version, stable);
+        return new QueryResults<Long>(res, 3);
+    }
+
+    /**
+     * Get the size of an object, object pool version.
+     *
+     * @param path          The byte buffer path of the key-value pair.
+     * @param version       The version returned by the Future object of past put.
+     *                      -1 if no version is available.
+     * @param stable        Get stable version or not.
+     * @return The size of the object.
+     */
+    public QueryResults<Long> get_size(ByteBuffer path, long version, boolean stable)
+    {
+        long res = getSizeInternal(path, version, stable);
+        return new QueryResults<Long>(res, 3);
+    }
+
+    /**
+     * Multi-get the size of an object, typed version.
+     *
+     * @param type          The type of the subgroup.
+     * @param subgroupIndex The index of the subgroup with type {@code type} to get
+     *                      this key-value pair from.
+     * @param shardIndex    The index of the shard within the subgroup with type
+     *                      {@code type} and subgroup index {@code subgroupIndex} to
+     *                      get this key-value pair from.
+     * @param key           The byte buffer key of the key-value pair.
+     * @return The size of the object.
+     */
+    public QueryResults<Long> multi_get_size(ServiceType type, long subgroupIndex, long shardIndex,
+        ByteBuffer key)
+    {
+        long res = multiGetSizeInternal(type, subgroupIndex, shardIndex, key);
+        return new QueryResults<Long>(res, 3);
+    }
+
+    /**
+     * Multi-get the size of an object, object pool version.
+     *
+     * @param path          The byte buffer path of the key-value pair.
+     * @return The size of the object.
+     */
+    public QueryResults<Long> multi_get_size(ByteBuffer path)
+    {
+        long res = multiGetSizeInternal(path);
+        return new QueryResults<Long>(res, 3);
+    }
+
+    /**
+     * Get size by time, typed version.
+     *
+     * @param type          The type of the subgroup.
+     * @param subgroupIndex The index of the subgroup with type {@code type} to get
+     *                      this key-value pair from.
+     * @param shardIndex    The index of the shard within the subgroup with type
+     *                      {@code type} and subgroup index {@code subgroupIndex} to
+     *                      get this key-value pair from.
+     * @param key           The byte buffer key of the key-value pair.
+     * @param timestamp     Wall clock time in microsecond.
+     * @param stable        True if only stable version is needed, False otherwise..
+     * @return A handle of the C++ future that stores the byte buffer for values.
+     */
+    public QueryResults<Long> get_size_by_time(ServiceType type, long subgroupIndex, long shardIndex,
+        ByteBuffer key, long timestamp, boolean stable)
+    {
+        long res = getSizeByTimeInternal(type, subgroupIndex, shardIndex, key, timestamp, stable);
+        return new QueryResults<Long>(res, 3);
+    }
+
+    /**
+     * Get size by time, object pool version.
+     *
+     * @param path          A ByteBuffer containing the path of the object pool.
+     * @param timestamp     Wall clock time in microsecond.
+     * @param stable        get stable version or not.
+     * @return A handle of the C++ future that stores the byte buffer for values.
+     */
+    public QueryResults<Long> get_size_by_time(ByteBuffer path, long timestamp, boolean stable)
+    {
+        long res = getSizeByTimeInternal(path, timestamp, stable);
+        return new QueryResults<Long>(res, 3);
+    }
+
     /**** INTERNAL FUNCTIONS ****/
 
     /**
@@ -907,7 +1015,7 @@ public class Client implements AutoCloseable {
      * @param stable        get stable data or not.
      * @return A list of handles of the C++ future that stores a vector with all keys in a shard.
      */
-    private native List<Long> listKeysInternal(ByteBuffer path, long version, boolean stable);
+    private native ArrayList<Long> listKeysInternal(ByteBuffer path, long version, boolean stable);
 
     /**
      * Internal interface for list key by time operation.
@@ -1067,12 +1175,63 @@ public class Client implements AutoCloseable {
      * Internal interface for get size operation in an object pool.
      *
      * @param path          A ByteBuffer containing the path of the object pool.
-     * @param key           The byte buffer key of the key-value pair.
      * @param version       The version returned by the Future object of past put.
      *                      -1 if no version is available.
      * @param stable        get stable version or not.
      * @return A handle of the C++ future that stores the byte buffer for values.
      */
-    private native long getSizeInternal(ByteBuffer path, ByteBuffer key, long version,
+    private native long getSizeInternal(ByteBuffer path, long version,
+        boolean stable);
+
+    /**
+     * Internal interface for multi get size operation.
+     *
+     * @param type          The type of the subgroup.
+     * @param subgroupIndex The index of the subgroup with type {@code type} to get
+     *                      this key-value pair from.
+     * @param shardIndex    The index of the shard within the subgroup with type
+     *                      {@code type} and subgroup index {@code subgroupIndex} to
+     *                      get this key-value pair from.
+     * @param key           The byte buffer key of the key-value pair.
+     * @return A handle of the C++ future that stores the byte buffer for values.
+     */
+    private native long multiGetSizeInternal(ServiceType type, long subgroupIndex, long shardIndex,
+        ByteBuffer key);
+
+    /**
+     * Internal interface for multi get size operation in an object pool.
+     *
+     * @param path          A ByteBuffer containing the path of the object pool.
+     * @return A handle of the C++ future that stores the byte buffer for values.
+     */
+    private native long multiGetSizeInternal(ByteBuffer path);
+
+    /**
+     * Internal interface for get size by time operation.
+     *
+     * @param type          The type of the subgroup.
+     * @param subgroupIndex The index of the subgroup with type {@code type} to get
+     *                      this key-value pair from.
+     * @param shardIndex    The index of the shard within the subgroup with type
+     *                      {@code type} and subgroup index {@code subgroupIndex} to
+     *                      get this key-value pair from.
+     * @param key           The byte buffer key of the key-value pair.
+     * @param timestamp     Wall clock time in microsecond.
+     * @param stable        True if only stable version is needed, False otherwise..
+     * @return A handle of the C++ future that stores the byte buffer for values.
+     */
+    private native long getSizeByTimeInternal(ServiceType type, long subgroupIndex, long shardIndex,
+        ByteBuffer key, long timestamp, boolean stable);
+
+    /**
+     * Internal interface for get size by time operation in an object pool.
+     *
+     * @param path          A ByteBuffer containing the path of the object pool.
+     * @param timestamp     Wall clock time in microsecond.
+     * @param stable        get stable version or not.
+     * @param stable        True if only stable version is needed, False otherwise..
+     * @return A handle of the C++ future that stores the byte buffer for values.
+     */
+    private native long getSizeByTimeInternal(ByteBuffer path, long timestamp,
         boolean stable);
 }

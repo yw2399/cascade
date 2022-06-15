@@ -48,7 +48,7 @@ public class ShardSupplier implements Supplier<ByteBuffer>{
      * @return true if the supplier is built successfully, false otherwise.
      */
     public boolean build(){
-        try (QueryResults<List<ByteBuffer>> queryResults = client.listKeys(type, version, subgroupIndex, shardIndex)) {
+        try (QueryResults<List<ByteBuffer>> queryResults = client.list_keys(type, version, true, subgroupIndex, shardIndex)) {
             Map<Integer, List<ByteBuffer>> replyMap = queryResults.get();
             if (replyMap != null){
                 keyList = new ArrayList<>();

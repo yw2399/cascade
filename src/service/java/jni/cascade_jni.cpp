@@ -692,10 +692,11 @@ JNIEXPORT jobject JNICALL Java_io_cascade_Client_listKeysInternal__Ljava_nio_Byt
 #endif
     // Execute listKeys for object pool.
     std::string pool_path = translate_str_key(env, path);
+
     std::vector<std::unique_ptr<derecho::rpc::QueryResults<std::vector<std::string>>>> results =
         std::move(capi->list_keys(version, stable, pool_path));
 
-    // Create a Java array list to hold the return value.
+    // Create a Java list to hold the return value.
     jclass arr_list_cls = env->FindClass("java/util/ArrayList");
     jmethodID arr_init_mid = env->GetMethodID(arr_list_cls, "<init>", "()V");
     jobject arr_obj = env->NewObject(arr_list_cls, arr_init_mid);
@@ -970,6 +971,21 @@ JNIEXPORT jobject JNICALL Java_io_cascade_QueryResults_getReplyMap(JNIEnv *env, 
         return arr_obj;
     };
 
+    // lambda that translates into Java Long type.
+    auto long_f = [env](uint64_t obj) {
+
+#ifndef NDEBUG   
+        std::cout << "Converting uint64_t to Java Long!\n"
+                  << "size: " << obj << std::endl;
+#endif
+        std::cout << "Converting uint64_t to Java Long!\n"
+                  << "size: " << obj << std::endl;
+        // Create the Long object from uint64_t.
+        jclass long_cls = env->FindClass("java/lang/Long");
+        jmethodID long_init_mid = env->GetMethodID(long_cls, "<init>", "(J)V");
+        return env->NewObject(long_cls, long_init_mid, static_cast<jlong>(obj));
+    };
+
 
     // get different reply maps base on mode
     switch (mode)
@@ -985,6 +1001,9 @@ JNIEXPORT jobject JNICALL Java_io_cascade_QueryResults_getReplyMap(JNIEnv *env, 
     // vectors of buffers
     case 2:
         create_object_from_query<std::vector<std::string>>(env, handle, hash_map_object, s_vf);
+        break;
+    case 3:
+        create_object_from_query<uint64_t>(env, handle, hash_map_object, long_f);
         break;
     default:
         break;
@@ -1167,6 +1186,15 @@ JNIEXPORT void JNICALL Java_io_cascade_QueryResults_closeHandle (JNIEnv* env, jo
                 }
             }
             break;
+        case 3:
+            {
+                QueryResultHolder<uint64_t>* qrh =
+                    reinterpret_cast<QueryResultHolder<uint64_t>*>(jhandle);
+                if (qrh != nullptr) {
+                    delete qrh;
+                }
+            }
+            break;
     }
     env->SetLongField(obj,query_results_fid,0L);
 }
@@ -1299,6 +1327,7 @@ JNIEXPORT jlong JNICALL Java_io_cascade_Client_multiGetInternal__Ljava_nio_ByteB
  * Class:     io_cascade_Client
  * Method:    getInternal
  * Signature: (Ljava/nio/ByteBuffer;)J
+ * Get operation for object pool.
  */
 JNIEXPORT jlong JNICALL Java_io_cascade_Client_getInternal__Ljava_nio_ByteBuffer_2
     (JNIEnv *env, jobject obj, jobject key)
@@ -1396,4 +1425,222 @@ JNIEXPORT jobject JNICALL Java_io_cascade_Client_listObjectPools(JNIEnv *env, jo
     derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
     std::vector<std::string> opps = capi->list_object_pools(true);
     return cpp_string_vector_to_java_list(env, opps);
+}
+
+/**
+ * Helper function to get size of an object from a cascade store.
+ * @param env               the Java environment to find JVM.
+ * @param capi              the service client API for this client.
+ * @param subgroup_index    the subgroup index to get the object.
+ * @param shard_index       the subgroup index to get the object.
+ * @param key               the Java byte buffer key to get.
+ * @param ver               the version number of the key-value pair to get.
+ * @param stable            return stable version or not.
+ * @param f                 a lambda function that converts Java keys into C++ keys.
+ * @return a handle of the future that stores the buffer of the value.
+ */
+template <typename T>
+jlong getSize(JNIEnv *env, derecho::cascade::ServiceClientAPI *capi, jlong subgroup_index,
+        jlong shard_index, jobject key, jlong ver, jboolean stable,
+        std::function<typename T::KeyType(JNIEnv *, jobject)> f)
+{
+#ifndef NDEBUG
+    std::cout << "Start get size!" << std::endl;
+#endif
+    // Translate the key.
+    typename T::KeyType typed_key = f(env, key);
+    // Execute get size API.
+    derecho::rpc::QueryResults<uint64_t> res = capi->get_size<T>(typed_key, ver, stable,
+                                                                 subgroup_index, shard_index);
+    // store the result in a handler
+    QueryResultHolder<uint64_t> *qrh = new QueryResultHolder<uint64_t>(res);
+    return reinterpret_cast<jlong>(qrh);
+}
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    getSizeInternal
+ * Signature: (Lio/cascade/ServiceType;JJLjava/nio/ByteBuffer;JZ)J
+ * The typed version of the get size operation.
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_getSizeInternal__Lio_cascade_ServiceType_2JJLjava_nio_ByteBuffer_2JZ
+  (JNIEnv * env, jobject obj, jobject j_service_type, jlong subgroup_index, jlong shard_index,
+   jobject key, jlong version, jboolean stable)
+{
+#ifndef NDEBUG
+    std::cout << "Start typed get size internal!" << std::endl;
+#endif
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+    int service_type = get_int_value(env, j_service_type);
+    // Executing the get size.
+    on_service_type(service_type, return getSize, env, capi, subgroup_index, shard_index, key,
+                    version, stable, translate_str_key);
+    // If service_type does not match successfully, return -1.
+    return -1;
+}
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    getSizeInternal
+ * Signature: (Ljava/nio/ByteBuffer;JZ)J
+ * The object pool version of the get size operation.
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_getSizeInternal__Ljava_nio_ByteBuffer_2JZ
+  (JNIEnv * env, jobject obj, jobject path, jlong version, jboolean stable)
+{
+#ifndef NDEBUG
+    std::cout << "Start get size internal for object pool!" << std::endl;
+#endif
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+    // Execute multi_get for object pool.
+    std::string obj_key = translate_str_key(env, path);
+    derecho::rpc::QueryResults<uint64_t> res = capi->get_size(obj_key, version, stable);
+    // Store the result in a handler.
+    QueryResultHolder<uint64_t> *qrh = new QueryResultHolder<uint64_t>(res);
+    return reinterpret_cast<jlong>(qrh);
+}
+
+/**
+ * Helper function to multi-get size of an object from a cascade store.
+ * @param env               the Java environment to find JVM.
+ * @param capi              the service client API for this client.
+ * @param subgroup_index    the subgroup index to get the object.
+ * @param shard_index       the subgroup index to get the object.
+ * @param key               the Java byte buffer key to get.
+ * @param f                 a lambda function that converts Java keys into C++ keys.
+ * @return a handle of the future that stores the buffer of the value.
+ */
+template <typename T>
+jlong multiGetSize(JNIEnv *env, derecho::cascade::ServiceClientAPI *capi, jlong subgroup_index,
+        jlong shard_index, jobject key, std::function<typename T::KeyType(JNIEnv *, jobject)> f)
+{
+#ifndef NDEBUG
+    std::cout << "Start multi get size!" << std::endl;
+#endif
+    // Translate the key.
+    typename T::KeyType typed_key = f(env, key);
+    // Execute get size API.
+    derecho::rpc::QueryResults<uint64_t> res = capi->multi_get_size<T>(typed_key, subgroup_index,
+            shard_index);
+    // store the result in a handler
+    QueryResultHolder<uint64_t> *qrh = new QueryResultHolder<uint64_t>(res);
+    return reinterpret_cast<jlong>(qrh);
+}
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    multiGetSizeInternal
+ * Signature: (Lio/cascade/ServiceType;JJLjava/nio/ByteBuffer;)J
+ * The typed version of the multi get size operation.
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_multiGetSizeInternal__Lio_cascade_ServiceType_2JJLjava_nio_ByteBuffer_2
+  (JNIEnv * env, jobject obj, jobject j_service_type, jlong subgroup_index, jlong shard_index,
+   jobject key)
+{
+#ifndef NDEBUG
+    std::cout << "Start typed multi get size internal!" << std::endl;
+#endif
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+    int service_type = get_int_value(env, j_service_type);
+    // Executing the get size.
+    on_service_type(service_type, return multiGetSize, env, capi, subgroup_index, shard_index, key,
+                    translate_str_key);
+    // If service_type does not match successfully, return -1.
+    return -1;
+}
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    multiGetSizeInternal
+ * Signature: (Ljava/nio/ByteBuffer;)J
+ * The object pool version of the multi get size operation.
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_multiGetSizeInternal__Ljava_nio_ByteBuffer_2
+  (JNIEnv * env, jobject obj, jobject path)
+{
+#ifndef NDEBUG
+    std::cout << "Start get size internal for object pool!" << std::endl;
+#endif
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+    // Execute multi_get for object pool.
+    std::string obj_key = translate_str_key(env, path);
+    auto res = capi-> multi_get_size(obj_key);
+    // Store the result in a handler.
+    QueryResultHolder<uint64_t> *qrh = new QueryResultHolder<uint64_t>(res);
+    return reinterpret_cast<jlong>(qrh);
+}
+
+/**
+ * Helper function to get size by time of an object from a cascade store.
+ * @param env               the Java environment to find JVM.
+ * @param capi              the service client API for this client.
+ * @param subgroup_index    the subgroup index to get the object.
+ * @param shard_index       the subgroup index to get the object.
+ * @param key               the Java byte buffer key to get.
+ * @param timestamp         wall clock time in microseconds.
+ * @param stable            return stable version or not.
+ * @param f                 a lambda function that converts Java keys into C++ keys.
+ * @return a handle of the future that stores the buffer of the value.
+ */
+template <typename T>
+jlong getSizeByTime(JNIEnv *env, derecho::cascade::ServiceClientAPI *capi, jlong subgroup_index,
+        jlong shard_index, jobject key, jlong timestamp, jboolean stable,
+        std::function<typename T::KeyType(JNIEnv *, jobject)> f)
+{
+#ifndef NDEBUG
+    std::cout << "Start get size by time!" << std::endl;
+#endif
+    // Translate the key.
+    typename T::KeyType typed_key = f(env, key);
+    // Execute get size API.
+    derecho::rpc::QueryResults<uint64_t> res = capi->get_size_by_time<T>(typed_key, timestamp, stable,
+                                                                 subgroup_index, shard_index);
+    // store the result in a handler
+    QueryResultHolder<uint64_t> *qrh = new QueryResultHolder<uint64_t>(res);
+    return reinterpret_cast<jlong>(qrh);
+}
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    getSizeByTimeInternal
+ * Signature: (Lio/cascade/ServiceType;JJLjava/nio/ByteBuffer;JZ)J
+ * The typed version of get size by time.
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_getSizeByTimeInternal__Lio_cascade_ServiceType_2JJLjava_nio_ByteBuffer_2JZ
+  (JNIEnv * env, jobject obj, jobject j_service_type, jlong subgroup_index, jlong shard_index,
+   jobject key, jlong timestamp, jboolean stable)
+{
+#ifndef NDEBUG
+    std::cout << "Start typed get size internal!" << std::endl;
+#endif
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+    int service_type = get_int_value(env, j_service_type);
+    // Executing the get size.
+    on_service_type(service_type, return getSizeByTime, env, capi, subgroup_index, shard_index, key,
+                    timestamp, stable, translate_str_key);
+    // If service_type does not match successfully, return -1.
+    return -1;
+}
+
+/*
+ * Class:     io_cascade_Client
+ * Method:    getSizeByTimeInternal
+ * Signature: (Ljava/nio/ByteBuffer;JZ)J
+ * The object pool version of get size by time.
+ */
+JNIEXPORT jlong JNICALL Java_io_cascade_Client_getSizeByTimeInternal__Ljava_nio_ByteBuffer_2JZ
+  (JNIEnv * env, jobject obj, jobject path, jlong timestamp, jboolean stable)
+{
+#ifndef NDEBUG
+    std::cout << "Start get size by time internal for object pool!" << std::endl;
+#endif
+    derecho::cascade::ServiceClientAPI *capi = get_api(env, obj);
+    // Execute multi_get for object pool.
+    std::string obj_key = translate_str_key(env, path);
+    std::cout << "Start get size by time internal for object pool with key: "
+        <<  obj_key << " and time: " << timestamp << std::endl;
+    auto res = capi->get_size_by_time(obj_key, timestamp, stable);
+    // Store the result in a handler.
+    QueryResultHolder<uint64_t> *qrh = new QueryResultHolder<uint64_t>(res);
+    return reinterpret_cast<jlong>(qrh);
 }

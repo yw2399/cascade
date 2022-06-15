@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Test the use of client.
@@ -89,7 +91,16 @@ public class ClientTest {
             + "put_and_forget_obj <key> <value>\n\tput_and_forget an object in the object pool\n"
             + "get_obj <key>\n\tget an object from the object pool\n"
             + "multi_get_obj <key>\n\tget an object from the object pool using multi_get\n"
-            + "remove_obj <key>\n\tremove an object from the object pool\n";
+            + "remove_obj <key>\n\tremove an object from the object pool\n"//TODO
+            + "list_keys <type> [version] [stable] [subgroup_index] [shard_index]\n\tlist all the keys inside a shard\n"
+            + "list_keys_obj <path> [version] [stable]\n\tlist all the keys inside an object pool\n"
+            + "get_size <type> <key> [version] [stable] [subgroup_index] [shard_index]\n\tget the size of an object associated with the key\n"
+            + "get_size_obj <path> [version] [stable]\n\tget the size of an object inside the object pool\n"
+            + "get_size_by_time <type> <key> <timestamp> [stable] [subgroup_index] [shard_index]\n\tget the size of an object associated with the key\n"
+            + "get_size_by_time_obj <path> <timestamp> [stable]\n\tget the size of an object inside the object pool\n"
+            + "multi_get_size <type> <key> [subgroup_index] [shard_index]\n\tget the size of an object associated with the key using multi-get\n"
+            + "multi_get_size_obj <path>\n\tget the size of an object inside the object pool using multi-get\n"
+            + "list_obj_pools \n\t list all the object pools\n";
 
 
     /**
@@ -101,7 +112,11 @@ public class ClientTest {
 
         try (Client client = new Client()) {
             while (true) {
+                // The default values.
                 long subgroupIndex = 0, shardIndex = 0;
+                long version = -1;
+                boolean stable = true;
+                long timestamp = 0;
                 System.out.print("cmd> ");
                 BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
                 String str = br.readLine();
@@ -277,8 +292,7 @@ public class ClientTest {
                             System.out.println(ANSI_RED + "Invalid type: " + str + ANSI_RESET);
                             continue;
                         }
-                        boolean stable = Boolean.parseBoolean(splited[3]);
-                        long version = -1;
+                        stable = Boolean.parseBoolean(splited[3]);
                         if (splited.length >= 5)
                             version = Long.parseLong(splited[4]);
                         if (splited.length >= 6)
@@ -343,7 +357,7 @@ public class ClientTest {
                             System.out.println(ANSI_RED + "Invalid type: " + str + ANSI_RESET);
                             continue;
                         }
-                        long timestamp = Long.parseLong(splited[3]);
+                        timestamp = Long.parseLong(splited[3]);
                         stable = Boolean.parseBoolean(splited[4]);
                         if (splited.length >= 6)
                             subgroupIndex = Integer.parseInt(splited[5]);
@@ -462,6 +476,212 @@ public class ClientTest {
                             System.out.println(qr.get());
                         }
                         break;
+                    case "list_keys":
+                        //List all the keys inside a shard.
+                        // Example: list_keys TYPE VERSION STABLE SUBGROUP_IDX SHARD_IDX
+                        if (splited.length < 2) {
+                            System.out.println(ANSI_RED + "Invalid format: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        type = stringToType(splited[1]);
+                        if (type == null) {
+                            System.out.println(ANSI_RED + "Invalid type: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        if (splited.length >= 3)
+                            version = Long.parseLong(splited[2]);
+                        if (splited.length >= 4)
+                            stable = Boolean.parseBoolean(splited[3]);
+                        if (splited.length >= 5)
+                            subgroupIndex = Integer.parseInt(splited[4]);
+                        if (splited.length >= 6)
+                            shardIndex = Integer.parseInt(splited[5]);
+                         
+                        try (QueryResults<List<ByteBuffer>> qr  =
+                                client.list_keys(type, version, stable, subgroupIndex, shardIndex)) {
+                            Map<Integer, List<ByteBuffer>> data = qr.get();
+                            for (List<ByteBuffer> key_list : data.values()) {
+                                for (ByteBuffer key: key_list){
+                                    ClientTest._print_byte_buffer(key);
+                                }
+                            }
+                        }
+                        break;
+                    case "list_keys_obj":
+                        //List all the keys inside an object pool.
+                        // Example: list_keys_obj PATH VERSION STABLE
+                        if (splited.length < 2) {
+                            System.out.println(ANSI_RED + "Invalid format: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        if (splited.length >= 3)
+                            version = Long.parseLong(splited[2]);
+                        if (splited.length >= 4)
+                            stable = Boolean.parseBoolean(splited[3]);
+                        ArrayList<QueryResults<List<ByteBuffer>>> qr_list  =
+                            client.list_keys(ClientTest._str2ByteBuffer(splited[1]), version, stable);
+                        for(QueryResults<List<ByteBuffer>> qr : qr_list) {
+                            Map<Integer, List<ByteBuffer>> data = qr.get();
+                            for (List<ByteBuffer> key_list : data.values()) {
+                                for (ByteBuffer key: key_list){
+                                    ClientTest._print_byte_buffer(key);
+                                }
+                            }
+                        }
+                        break;
+                    case "get_size":
+                        // Get the size of an object.
+                        // Example: get_size TYPE KEY VERSION STABLE SUBGROUP_IDX SHARD_IDX
+                        if (splited.length < 3) {
+                            System.out.println(ANSI_RED + "Invalid format: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        type = stringToType(splited[1]);
+                        if (type == null) {
+                            System.out.println(ANSI_RED + "Invalid type: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        if (splited.length >= 4)
+                            version = Long.parseLong(splited[3]);
+                        if (splited.length >= 5)
+                            stable = Boolean.parseBoolean(splited[4]);
+                        if (splited.length >= 6)
+                            subgroupIndex = Integer.parseInt(splited[5]);
+                        if (splited.length >= 7)
+                            shardIndex = Integer.parseInt(splited[6]);
+                         
+                        try (QueryResults<Long> qr  =
+                                client.get_size(type, subgroupIndex, shardIndex,
+                                    ClientTest._str2ByteBuffer(splited[2]), version, stable)) {
+                            Map<Integer, Long> data = qr.get();
+                            for (Long size : data.values()) {
+                                System.out.printf("Size: %d\n", size.longValue());
+                            }
+                        }
+                        break;
+                    case "get_size_obj":
+                        // Get the size of an object in the object pool.
+                        // Example: get_size_obj PATH VERSION STABLE SUBGROUP_IDX SHARD_IDX
+                        if (splited.length < 2) {
+                            System.out.println(ANSI_RED + "Invalid format: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        if (splited.length >= 3)
+                            version = Long.parseLong(splited[2]);
+                        if (splited.length >= 4)
+                            stable = Boolean.parseBoolean(splited[3]);
+                         
+                        try (QueryResults<Long> qr  =
+                                client.get_size(ClientTest._str2ByteBuffer(splited[1]), version, stable)) {
+                            Map<Integer, Long> data = qr.get();
+                            for (Long size : data.values()) {
+                                System.out.printf("Size: %d\n", size.longValue());
+                            }
+                        }
+                        break;
+                    case "get_size_by_time":
+                        // Get the size of an object by the putting time..
+                        // Example: get_size_by_time TYPE KEY TIMESTAMP STABLE SUBGROUP_IDX SHARD_IDX
+                        if (splited.length < 3) {
+                            System.out.println(ANSI_RED + "Invalid format: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        type = stringToType(splited[1]);
+                        if (type == null) {
+                            System.out.println(ANSI_RED + "Invalid type: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        if (splited.length >= 4)
+                            timestamp = Long.parseLong(splited[3]);
+                        if (splited.length >= 5)
+                            stable = Boolean.parseBoolean(splited[4]);
+                        if (splited.length >= 6)
+                            subgroupIndex = Integer.parseInt(splited[5]);
+                        if (splited.length >= 7)
+                            shardIndex = Integer.parseInt(splited[6]);
+                         
+                        try (QueryResults<Long> qr  =
+                                client.get_size_by_time(type, subgroupIndex, shardIndex,
+                                    ClientTest._str2ByteBuffer(splited[2]), timestamp, stable)) {
+                            Map<Integer, Long> data = qr.get();
+                            for (Long size : data.values()) {
+                                System.out.printf("Size: %d\n", size.longValue());
+                            }
+                        }
+                        break;
+                    case "get_size_by_time_obj":
+                        // Get the size of an object in the object pool.
+                        // Example: get_size_by_time PATH VERSION STABLE SUBGROUP_IDX SHARD_IDX
+                        if (splited.length < 2) {
+                            System.out.println(ANSI_RED + "Invalid format: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        if (splited.length >= 3)
+                            timestamp = Long.parseLong(splited[2]);
+                        if (splited.length >= 4)
+                            stable = Boolean.parseBoolean(splited[3]);
+                         
+                        try (QueryResults<Long> qr  =
+                                client.get_size_by_time(ClientTest._str2ByteBuffer(splited[1]),
+                                    timestamp, stable)) {
+                            Map<Integer, Long> data = qr.get();
+                            for (Long size : data.values()) {
+                                System.out.printf("Size: %d\n", size.longValue());
+                            }
+                        }
+                        break;
+                    case "multi_get_size":
+                        // Get the size of an object.
+                        // Example: multi_get_size TYPE KEY SUBGROUP_IDX SHARD_IDX
+                        if (splited.length < 3) {
+                            System.out.println(ANSI_RED + "Invalid format: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        type = stringToType(splited[1]);
+                        if (type == null) {
+                            System.out.println(ANSI_RED + "Invalid type: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        if (splited.length >= 4)
+                            subgroupIndex = Integer.parseInt(splited[3]);
+                        if (splited.length >= 5)
+                            shardIndex = Integer.parseInt(splited[4]);
+                         
+                        try (QueryResults<Long> qr  =
+                                client.multi_get_size(type, subgroupIndex, shardIndex,
+                                    ClientTest._str2ByteBuffer(splited[2]))) {
+                            Map<Integer, Long> data = qr.get();
+                            for (Long size : data.values()) {
+                                System.out.printf("Size: %d\n", size.longValue());
+                            }
+                        }
+                        break;
+                    case "multi_get_size_obj":
+                        // Get the size of an object in the object pool.
+                        // Example: multi_get_size_obj PATH.
+                        if (splited.length < 2) {
+                            System.out.println(ANSI_RED + "Invalid format: " + str + ANSI_RESET);
+                            continue;
+                        }
+                         
+                        try (QueryResults<Long> qr  =
+                                client.multi_get_size(ClientTest._str2ByteBuffer(splited[1]))) {
+                            Map<Integer, Long> data = qr.get();
+                            for (Long size : data.values()) {
+                                System.out.printf("Size: %d\n", size.longValue());
+                            }
+                        }
+                        break;
+                    case "list_obj_pools":
+                        // Get all the object pools.
+                        // Example: list_object_pools
+                        if (splited.length != 1) {
+                            System.out.println(ANSI_RED + "Invalid format: " + str + ANSI_RESET);
+                            continue;
+                        }
+                        for(ByteBuffer pool : client.listObjectPools())
+                            ClientTest._print_byte_buffer(pool);
+                        break;
 
                     default:
                         System.out.println(ANSI_RED + "Command: " + splited[0] +
@@ -479,5 +699,32 @@ public class ClientTest {
         System.out.println("Here is client test!");
         // main1();
         main2();
+    }
+
+    /**
+     * Helper function to print a byte buffer in bytes without assuming its content.
+     *
+     *@param bb A ByteBuffer to print.
+     */
+    private static void _print_byte_buffer(ByteBuffer bb){
+        byte b[] = new byte[bb.capacity()];
+        for (int i = 0;i < bb.capacity(); i++){
+            b[i] = bb.get(i);
+        }
+        System.out.println("bytes: " + new String(b));
+    }
+
+    /**
+     * Helper function to convert String to ByteBuffer.
+     *
+     * @param str The String object to be converted.
+     *
+     * @return A ByteBuffer containing the String.
+     */
+    private static ByteBuffer _str2ByteBuffer(String str){
+        byte[] arr = str.getBytes();
+        ByteBuffer bb = ByteBuffer.allocateDirect(arr.length);
+        bb.put(arr);
+        return bb;
     }
 }
